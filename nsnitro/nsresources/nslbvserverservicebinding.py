@@ -161,7 +161,6 @@ class NSLBVServerServiceBinding(NSBaseResource):
         __vserver_service_binding.get_resource(nitro, object_name=__vserver_service_binding.get_name())
         return __vserver_service_binding
 
-
     @staticmethod
     def add(nitro, vserver_service_binding):
         """

@@ -48,8 +48,7 @@ class TestNitroFunctions(unittest.TestCase):
             status=200,
             content_type='application/json')
         cls.httpretty.register_uri(httpretty.GET,
-            body='
-{ "errorcode": 0, "message": "Done", "severity": "NONE", "hanode": [ { "id": "0", "name": "NSVPX10.1", "ipaddress": "10.216.91.222", "flags": "129", "hastatus": "UP", "state": "Primary", "hasync": "ENABLED", "haprop": "ENABLED", "enaifaces": "0\/1 1\/1", "network": "32.120.1.0", "netmask": "0.0.0.0", "inc": "DISABLED", "ssl2": "NOT PRESENT", "hellointerval": 200, "deadinterval": 3, "masterstatetime": 96288, "failsafe": "OFF", "routemonitor": "10.216.91.222", "maxflips": "0", "maxfliptime": "0", "curflips": "0", "completedfliptime": "0" } ] }')
+            body='{ "errorcode": 0, "message": "Done", "severity": "NONE", "hanode": [ { "id": "0", "name": "NSVPX10.1", "ipaddress": "10.216.91.222", "flags": "129", "hastatus": "UP", "state": "Primary", "hasync": "ENABLED", "haprop": "ENABLED", "enaifaces": "0\/1 1\/1", "network": "32.120.1.0", "netmask": "0.0.0.0", "inc": "DISABLED", "ssl2": "NOT PRESENT", "hellointerval": 200, "deadinterval": 3, "masterstatetime": 96288, "failsafe": "OFF", "routemonitor": "10.216.91.222", "maxflips": "0", "maxfliptime": "0", "curflips": "0", "completedfliptime": "0" } ] }')
         cls.nitro.login()
 
     @classmethod

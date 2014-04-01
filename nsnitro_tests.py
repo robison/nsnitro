@@ -48,8 +48,13 @@ class TestNitroFunctions(unittest.TestCase):
             status=200,
             content_type='application/json')
         cls.httpretty.register_uri(httpretty.GET,
-            "http://127.0.0.127/nitro/v1/config/hanode"
-            body='{ "errorcode": 0, "message": "Done", "severity": "NONE", "hanode": [ { "id": "0", "name": "NSVPX10.1", "ipaddress": "127.0.0.127", "flags": "129", "hastatus": "UP", "state": "Primary", "hasync": "ENABLED", "haprop": "ENABLED", "enaifaces": "0\/1 1\/1", "network": "32.120.1.0", "netmask": "0.0.0.0", "inc": "DISABLED", "ssl2": "NOT PRESENT", "hellointerval": 200, "deadinterval": 3, "masterstatetime": 96288, "failsafe": "OFF", "routemonitor": "10.216.91.222", "maxflips": "0", "maxfliptime": "0", "curflips": "0", "completedfliptime": "0" } ] }')
+            "http://127.0.0.127/nitro/v1/config/hanode",
+            body='{ "errorcode": 0, "message": "Done", "severity": "NONE", "hanode": [ { "id": "0", "name": "NSVPX10.1", "ipaddress": ' + nsnitro_test_netscaler_alt_ipaddress + '", "flags": "129", "hastatus": "UP", "state": "Primary", "hasync": "ENABLED", "haprop": "ENABLED", "enaifaces": "0\/1 1\/1", "network": "32.120.1.0", "netmask": "0.0.0.0", "inc": "DISABLED", "ssl2": "NOT PRESENT", "hellointerval": 200, "deadinterval": 3, "masterstatetime": 96288, "failsafe": "OFF", "routemonitor": "127.0.0.127", "maxflips": "0", "maxfliptime": "0", "curflips": "0", "completedfliptime": "0" } ] }',
+            status=200)
+        cls.httpretty.register_uri(httpretty.GET,
+            "http://127.0.0.127/nitro/v1/config/nsip",
+            body='{ "errorcode": 0, "message": "Done", "severity": "NONE", "nsip": [ { "ipaddress": "' + nsnitro_test_ip_ipaddress + '", "td": "0", "type": "NSIP", "netmask": "' + nsnitro_test_ip_netmask + '", "flags": "40", "arp": "ENABLED", "icmp": "ENABLED", "vserver": "DISABLED", "telnet": "ENABLED", "ssh": "ENABLED", "gui": "ENABLED", "snmp": "ENABLED", "ftp": "ENABLED", "mgmtaccess": "ENABLED", "restrictaccess": "DISABLED", "dynamicrouting": "ENABLED", "hostroute": "DISABLED", "hostrtgw": "0.0.0.0", "hostrtgwact": "0.0.0.0", "metric": 0, "ospfareaval": "0", "vserverrhilevel": "ONE_VSERVER", "viprtadv2bsd": false, "vipvsercount": "0", "vipvserdowncount": "0", "ospflsatype": "TYPE5", "state": "ENABLED", "freeports": "1032111", "iptype": [ "NSIP" ], "icmpresponse": "NONE", "ownernode": "255", "arpresponse": "NONE" }, { "ipaddress": "' + nsnitro_test_netscaler_alt_ipaddress + '", "td": "0", "type": "NSIP", "netmask": "' + nsnitro_test_ip_netmask + '", "flags": "40", "arp": "ENABLED", "icmp": "ENABLED", "vserver": "DISABLED", "telnet": "ENABLED", "ssh": "ENABLED", "gui": "ENABLED", "snmp": "ENABLED", "ftp": "ENABLED", "mgmtaccess": "ENABLED", "restrictaccess": "DISABLED", "dynamicrouting": "ENABLED", "hostroute": "DISABLED", "hostrtgw": "0.0.0.0", "hostrtgwact": "0.0.0.0", "metric": 0, "ospfareaval": "0", "vserverrhilevel": "ONE_VSERVER", "viprtadv2bsd": false, "vipvsercount": "0", "vipvserdowncount": "0", "ospflsatype": "TYPE5", "state": "ENABLED", "freeports": "1032111", "iptype": [ "NSIP" ], "icmpresponse": "NONE", "ownernode": "255", "arpresponse": "NONE" } ] }',
+            status=200)
         cls.nitro.login()
 
     @classmethod
@@ -237,7 +242,6 @@ class TestNitroFunctions(unittest.TestCase):
             hanode_list.append(hanode.get_id())
         self.assertIn('0', hanode_list)
 
-"""
     def test_05_get_ips(self):
         # List all IPs
         ips = NSIP.get_all(self.nitro)
@@ -247,6 +251,7 @@ class TestNitroFunctions(unittest.TestCase):
         self.assertIn(nsnitro_test_netscaler_ipaddress, ip_list)
         self.assertIn(nsnitro_test_ip_ipaddress, ip_list)
 
+"""
     def test_05_get_lbmonitor(self):
         # Get load-balancing monitor info
         lbmonitor = NSLBMonitor()

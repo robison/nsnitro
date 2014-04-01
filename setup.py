@@ -20,7 +20,7 @@ setup(
     url = "http://pypi.python.org/pypi/nsnitro",
     namespace_packages = ["nsnitro"],
     packages=["nsnitro"] + [os.path.join("nsnitro",a) for a in find_packages("nsnitro")],
-    long_description=read('README'),
+    long_description=read('README.md'),
     classifiers=[
         "Development Status :: 4 - Beta",
         "Topic :: Utilities",

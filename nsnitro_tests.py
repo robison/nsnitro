@@ -47,6 +47,9 @@ class TestNitroFunctions(unittest.TestCase):
             body='{"errorcode": 0, "message": "Done", "severity": "NONE"}',
             status=200,
             content_type='application/json')
+        cls.httpretty.register_uri(httpretty.GET,
+            body='
+{ "errorcode": 0, "message": "Done", "severity": "NONE", "hanode": [ { "id": "0", "name": "NSVPX10.1", "ipaddress": "10.216.91.222", "flags": "129", "hastatus": "UP", "state": "Primary", "hasync": "ENABLED", "haprop": "ENABLED", "enaifaces": "0\/1 1\/1", "network": "32.120.1.0", "netmask": "0.0.0.0", "inc": "DISABLED", "ssl2": "NOT PRESENT", "hellointerval": 200, "deadinterval": 3, "masterstatetime": 96288, "failsafe": "OFF", "routemonitor": "10.216.91.222", "maxflips": "0", "maxfliptime": "0", "curflips": "0", "completedfliptime": "0" } ] }')
         cls.nitro.login()
 
     @classmethod
@@ -226,6 +229,107 @@ class TestNitroFunctions(unittest.TestCase):
         r = NSService.enable(self.nitro, service)
         self.assertEqual(r.errorcode, 0)
 
+    def test_05_get_hanodes(self):
+        # Get HA node info
+        hanodes = NSHANode.get_all(self.nitro)
+        hanode_list = []
+        for hanode in hanodes:
+            hanode_list.append(hanode.get_id())
+        self.assertIn('0', hanode_list)
+
+"""
+    def test_05_get_ips(self):
+        # List all IPs
+        ips = NSIP.get_all(self.nitro)
+        ip_list = []
+        for ip in ips:
+            ip_list.append(ip.get_ipaddress())
+        self.assertIn(nsnitro_test_netscaler_ipaddress, ip_list)
+        self.assertIn(nsnitro_test_ip_ipaddress, ip_list)
+
+    def test_05_get_lbmonitor(self):
+        # Get load-balancing monitor info
+        lbmonitor = NSLBMonitor()
+        lbmonitor.set_monitorname('nsnitro_test_lbmonitor')
+        r = NSLBMonitor.get(self.nitro, lbmonitor).__dict__['options']
+        self.assertIn('nsnitro_test_lbmonitor', r['monitorname'])
+        self.assertIn('HEAD /', r['httprequest'])
+        self.assertEqual(5, r['interval'])
+
+    def test_05_get_lbvserver(self):
+        # Get load-balanced virtual server info
+        lbvserver = NSLBVServer()
+        lbvserver.set_name('nsnitro_test_lbvserver')
+        r = NSLBVServer.get(self.nitro, lbvserver).__dict__['options']
+        self.assertIn('nsnitro_test_lbvserver', r['name'])
+        self.assertEqual('180', r['clttimeout'])
+        self.assertEqual(nsnitro_test_lbvserver_port, r['port'])
+
+    def test_05_get_lbvserverservice_bindings(self):
+        # Get load-balanced virtual server/service binding
+        lbvserverservicebinding = NSLBVServerServiceBinding()
+        lbvserverservicebinding.set_name('nsnitro_test_lbvserver')
+        r = NSLBVServerServiceBinding.get(self.nitro, lbvserverservicebinding).__dict__['options']
+        self.assertIn('nsnitro_test_service', r['servicename'])
+        self.assertIn('nsnitro_test_lbvserver', r['name'])
+        self.assertIn(nsnitro_test_server_ipaddress, r['ipv46'])
+        self.assertIn(nsnitro_test_server_ipaddress, r['vsvrbindsvcip'])
+        self.assertEqual(nsnitro_test_service_port, r['port'])
+
+    def test_05_get_nsconfig(self):
+        # Get system configuration
+        r = NSConfig.get_all(self.nitro).__dict__['options']
+        self.assertIn(nsnitro_test_netscaler_ipaddress, r['ipaddress'])
+
+    def test_05_get_server(self):
+        # Get info on a specific server
+        server = NSService()
+        server.set_name('nsnitro_test_server')
+        r = NSServer.get(self.nitro, server).__dict__['options']
+        self.assertIn('nsnitro_test_server', r['name'])
+        self.assertIn(nsnitro_test_server_ipaddress, r['ipaddress'])
+
+    def test_05_get_service(self):
+        # Get info on a specific service
+        service = NSService()
+        service.set_name('nsnitro_test_service')
+        r = NSService.get(self.nitro, service).__dict__['options']
+        self.assertIn('nsnitro_test_service', r['name'])
+        self.assertIn('HTTP', r['servicetype'])
+        self.assertEqual(nsnitro_test_service_port, r['port'])
+
+    def test_05_get_vlan_if_bindings(self):
+        # Get all VLAN/interface bindings
+        vlans = NSVLAN.get_all(self.nitro)
+        vifb_list = []
+        for vlan in vlans:
+            vifbs = NSVLANInterfaceBinding.get(self.nitro, vlan)
+            vifb = vifbs.__dict__['options']
+            vifb_list.append(vifb['id'])
+        self.assertIn('1', vifb_list)
+        self.assertIn(nsnitro_test_vlan_id, vifb_list)
+
+    def test_05_get_vlan_ip_bindings(self):
+        # Get VLAN/IP address bindings
+        vlans = NSVLAN.get_all(self.nitro)
+        vipb_list = []
+        for vlan in vlans:
+            vipbs = NSVLANNSIPBinding.get(self.nitro, vlan)
+            vipb = vipbs.__dict__['options']
+            vipb_list.append(vipb['id'])
+        self.assertIn('1', vipb_list)
+        self.assertIn(nsnitro_test_vlan_id, vipb_list)
+
+    def test_05_get_vlans(self):
+        # Get VLANs
+        vlans = NSVLAN.get_all(self.nitro)
+        vlan_list = []
+        for vlan in vlans:
+            vlan_list.append(vlan.get_id())
+        self.assertIn('1', vlan_list)
+        self.assertIn(nsnitro_test_vlan_id, vlan_list)
+
+"""
 
     def test_06_rename_server_01(self):
         # Rename service

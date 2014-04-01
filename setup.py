@@ -31,6 +31,6 @@ setup(
         "argparse",
     ],
     scripts=[
-        'bin/nsnitrocmd.py'
+        'contrib/bin/nsnitrocmd.py'
     ],
 )

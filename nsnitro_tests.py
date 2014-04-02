@@ -1,5 +1,6 @@
-import httpretty
+from collections import defaultdict
 from httpretty import *
+from urlparse import parse_qs, urljoin
 import json
 import random
 import re
@@ -7,8 +8,7 @@ import sys
 import unittest
 from nsnitro import *
 
-nsnitro_test_netscaler_ipaddress = '10.216.91.222'
-nsnitro_test_netscaler_alt_ipaddress = '127.0.0.127'
+nsnitro_test_netscaler_ipaddress = '127.0.0.127'
 nsnitro_test_netscaler_uname = 'nsroot'
 nsnitro_test_netscaler_pword = 'nsroot'
 nsnitro_test_ip_ipaddress = '10.32.100.' + str(random.randrange(1, 256))
@@ -19,48 +19,147 @@ nsnitro_test_server_ipaddress = '10.32.120.' + str(random.randrange(1, 256))
 nsnitro_test_service_port = random.randrange(1025, 65536)
 nsnitro_test_interface_ifnum = '1/1'
 nsnitro_test_vlan_id = str(random.randrange(1025, 4096))
+nsnitro_api_url = 'http://127.0.0.127/nitro/v1/config'
 
+class NitroMockAPI(object):
+
+    def __init__(self, base_url):
+        self.items = defaultdict(dict)
+        self.base_url = base_url
+        self.default_name = "name"
+        self.name_maps = {}
+        resource_url = urljoin(self.base_url, "([^/]+/$)")
+        resource_regex = re.compile(resource_url)
+        item_regex = re.compile(urljoin(self.base_url, "([a-zA-Z0-9-_]+)/([a-zA-Z0-9-_]+?)"))
+
+
+        HTTPretty.register_uri(HTTPretty.GET,
+                               resource_regex,
+                               body=self.generate_resource_response)
+        HTTPretty.register_uri(HTTPretty.POST,
+                               resource_regex,
+                               body=self.generate_resource_response)
+        HTTPretty.register_uri(HTTPretty.PUT,
+                               resource_regex,
+                               body=self.generate_resource_response)
+#        HTTPretty.register_uri(HTTPretty.DELETE,
+#                               resource_regex,
+#                               body=self.generate_resource_response)
+
+        HTTPretty.register_uri(HTTPretty.GET,
+                               item_regex,
+                               body=self.generate_item_response)
+        HTTPretty.register_uri(HTTPretty.PUT,
+                               item_regex,
+                               body=self.generate_item_response)
+        HTTPretty.register_uri(HTTPretty.DELETE,
+                               item_regex,
+                               body=self.generate_item_response)
+
+    def __enter__(self):
+        HTTPretty.enable()
+        return self
+
+    def __exit__(self):
+        HTTPretty.disable()
+
+    def get_resource(self, resource):
+        return [item for key, item in self.items[resource].items()]
+
+    def set_resource(self, resource, items=[]):
+        for item in items:
+            if name in item:
+                self.items[resource][item[name]] = item
+            else:
+                exc = "No name: {0} found for item: {1}".format(name, item)
+                raise Exception(exc)
+
+    def get_name(self, resource):
+        return self.name_maps.get(resource, self.default_name)
+
+    def generate_resource_response(self, request, uri, headers):
+        headers["content_type"] = "application/json"
+        path = filter(lambda x: x not in ["nitro", "v1", ""], request.path.split('/'))
+        resource = path[0]
+
+        if request.method == "GET":
+            _items = self.get_resource(resource)
+            return [200, headers, json.dumps(_items)]
+
+        elif request.method == "POST":
+            qs = parse_qs(request.body)
+            out = {}
+            for key, data in qs.items():
+                resource_data = json.loads(data[0])
+                resource = filter(lambda x: x not in ["params", ""], resource_data.keys())
+                resource_name = resource['name']
+                if u'login' in resource:
+                    out = {"errorcode": 0, "message": "Done", "sessionid": "##0203D370A0FD6702D7EDF5166445EC935183F96E2ADDB24AF1C4E215A72C", "severity": "NONE"}
+                    return [201, headers, json.dumps(out)]
+                elif resource_name in self.items[resource]:
+                    self.items['resource'] = resource
+                    out = {"errorcode": 0, "message": "Done", "severity": "NONE"}
+#                if 'object' in item:
+#                    out = {"errorcode": 0, "message": "Done", "sessionid": "##0203D370A0FD6702D7EDF5166445EC935183F96E2ADDB24AF1C4E215A72C", "severity": "NONE"}
+            print self.items['resource']
+            return [201, headers, json.dumps(out)]
+
+        elif request.method == "PUT":
+            qs = parse_qs(request.body)
+            out = {}
+            for item, data in qs.items():
+                items = json.loads(data[0])
+            out = {"errorcode": 0, "message": "Done", "severity": "NONE"}
+            return [201, headers, json.dumps(out)]
+
+        elif request.method == "DELETE":
+            out = {"errorcode": 0, "message": "Done", "severity": "NONE"}
+            return [200, headers, json.dumps(out)]
+
+    def generate_item_response(self, request, uri, headers):
+        headers["content_type"] = "application/json"
+        resource, obj_name = filter(lambda x: x not in ["nitro", "v1", "config", ""], request.path.split('/'))
+
+        if obj_name not in self.items[resource]:
+            status_code = 409
+            if request.method == "GET":
+                status_code = 404
+            return [status_code, headers, json.dumps({"errorcode": -1, "message": "Errorcode -1, HTTP/1.1 404", "severity": "ERROR"})]
+
+        if request.method == "GET":
+            r = self.items[resource]
+            if obj_name in r:
+                return [200, headers, json.dumps(r[obj_name])]
+
+        elif request.method == "DELETE":
+            r = self.items[resource]
+            if obj_name in r:
+                del self.items[resource][obj_name]
+            return [200, headers, json.dumps({"errorcode": 0, "message": "Done", "severity": "NONE"})]
+
+        else:
+            return [405, headers, json.dumps({"errorcode": -1, "message": "Errorcode -1, HTTP/1.1 405", "severity": "ERROR"})]
+
+
+NitroMockAPI(nsnitro_api_url)
 
 class TestNitroFunctions(unittest.TestCase):
 
-    httpretty = httpretty()
-    nitro = NSNitro(nsnitro_test_netscaler_alt_ipaddress,
+    httpretty = HTTPretty()
+    nitro = NSNitro(nsnitro_test_netscaler_ipaddress,
         nsnitro_test_netscaler_uname,
         nsnitro_test_netscaler_pword,
         useSSL=False)
 
     @classmethod
     def setUpClass(cls):
-        cls.httpretty.enable()
-        cls.httpretty.register_uri(httpretty.POST,
-            "http://127.0.0.127/nitro/v1/config/",
-            body='{"errorcode": 0, "message": "Done", "sessionid": "##0203D370A0FD6702D7EDF5166445EC935183F96E2ADDB24AF1C4E215A72C", "severity": "NONE"}',
-            status=201,
-            content_type='application/json')
-        cls.httpretty.register_uri(httpretty.PUT,
-            "http://127.0.0.127/nitro/v1/config/",
-            body='{"errorcode": 0, "message": "Done", "severity": "NONE"}',
-            status=200,
-            content_type='application/json')
-        cls.httpretty.register_uri(httpretty.DELETE,
-            re.compile("127.0.0.127/nitro/v1/config/(.*)"),
-            body='{"errorcode": 0, "message": "Done", "severity": "NONE"}',
-            status=200,
-            content_type='application/json')
-        cls.httpretty.register_uri(httpretty.GET,
-            "http://127.0.0.127/nitro/v1/config/hanode",
-            body='{ "errorcode": 0, "message": "Done", "severity": "NONE", "hanode": [ { "id": "0", "name": "NSVPX10.1", "ipaddress": ' + nsnitro_test_netscaler_alt_ipaddress + '", "flags": "129", "hastatus": "UP", "state": "Primary", "hasync": "ENABLED", "haprop": "ENABLED", "enaifaces": "0\/1 1\/1", "network": "32.120.1.0", "netmask": "0.0.0.0", "inc": "DISABLED", "ssl2": "NOT PRESENT", "hellointerval": 200, "deadinterval": 3, "masterstatetime": 96288, "failsafe": "OFF", "routemonitor": "127.0.0.127", "maxflips": "0", "maxfliptime": "0", "curflips": "0", "completedfliptime": "0" } ] }',
-            status=200)
-        cls.httpretty.register_uri(httpretty.GET,
-            "http://127.0.0.127/nitro/v1/config/nsip",
-            body='{ "errorcode": 0, "message": "Done", "severity": "NONE", "nsip": [ { "ipaddress": "' + nsnitro_test_ip_ipaddress + '", "td": "0", "type": "NSIP", "netmask": "' + nsnitro_test_ip_netmask + '", "flags": "40", "arp": "ENABLED", "icmp": "ENABLED", "vserver": "DISABLED", "telnet": "ENABLED", "ssh": "ENABLED", "gui": "ENABLED", "snmp": "ENABLED", "ftp": "ENABLED", "mgmtaccess": "ENABLED", "restrictaccess": "DISABLED", "dynamicrouting": "ENABLED", "hostroute": "DISABLED", "hostrtgw": "0.0.0.0", "hostrtgwact": "0.0.0.0", "metric": 0, "ospfareaval": "0", "vserverrhilevel": "ONE_VSERVER", "viprtadv2bsd": false, "vipvsercount": "0", "vipvserdowncount": "0", "ospflsatype": "TYPE5", "state": "ENABLED", "freeports": "1032111", "iptype": [ "NSIP" ], "icmpresponse": "NONE", "ownernode": "255", "arpresponse": "NONE" }, { "ipaddress": "' + nsnitro_test_netscaler_alt_ipaddress + '", "td": "0", "type": "NSIP", "netmask": "' + nsnitro_test_ip_netmask + '", "flags": "40", "arp": "ENABLED", "icmp": "ENABLED", "vserver": "DISABLED", "telnet": "ENABLED", "ssh": "ENABLED", "gui": "ENABLED", "snmp": "ENABLED", "ftp": "ENABLED", "mgmtaccess": "ENABLED", "restrictaccess": "DISABLED", "dynamicrouting": "ENABLED", "hostroute": "DISABLED", "hostrtgw": "0.0.0.0", "hostrtgwact": "0.0.0.0", "metric": 0, "ospfareaval": "0", "vserverrhilevel": "ONE_VSERVER", "viprtadv2bsd": false, "vipvsercount": "0", "vipvserdowncount": "0", "ospflsatype": "TYPE5", "state": "ENABLED", "freeports": "1032111", "iptype": [ "NSIP" ], "icmpresponse": "NONE", "ownernode": "255", "arpresponse": "NONE" } ] }',
-            status=200)
+        HTTPretty.enable()
         cls.nitro.login()
 
     @classmethod
     def tearDownClass(cls):
         cls.nitro.logout()
-        httpretty.disable()
+        HTTPretty.disable()
 
     def test_00_add_ip(self):
         # Add IP address
@@ -109,7 +208,7 @@ class TestNitroFunctions(unittest.TestCase):
         r = NSSystemCMDPolicy.add(self.nitro, cmdpol)
         self.assertEqual(r.errorcode, 0)
 
-#    def test_01_add_cspolicy(self):
+#    #    def test_01_add_cspolicy(self):
 #        # Add content-switching policy
 #        cspol = NSCSPolicy()
 #        cspol.set_rule('CLIENT.IP.SRC.SUBNET(24).EQ(10.10.42.0)')
@@ -129,7 +228,7 @@ class TestNitroFunctions(unittest.TestCase):
         r = NSLBVServer.add(self.nitro, lbvserver)
         self.assertEqual(r.errorcode, 0)
 
-#    def test_01_add_rewriteaction(self):
+#    #    def test_01_add_rewriteaction(self):
 #        # Add rewrite action
 #        rewriteaction = NSRewriteAction()
 #        rewriteaction.set_name('nsnitro_test_rewriteaction')
@@ -234,107 +333,104 @@ class TestNitroFunctions(unittest.TestCase):
         r = NSService.enable(self.nitro, service)
         self.assertEqual(r.errorcode, 0)
 
-    def test_05_get_hanodes(self):
-        # Get HA node info
-        hanodes = NSHANode.get_all(self.nitro)
-        hanode_list = []
-        for hanode in hanodes:
-            hanode_list.append(hanode.get_id())
-        self.assertIn('0', hanode_list)
-
-    def test_05_get_ips(self):
-        # List all IPs
-        ips = NSIP.get_all(self.nitro)
-        ip_list = []
-        for ip in ips:
-            ip_list.append(ip.get_ipaddress())
-        self.assertIn(nsnitro_test_netscaler_ipaddress, ip_list)
-        self.assertIn(nsnitro_test_ip_ipaddress, ip_list)
-
-"""
-    def test_05_get_lbmonitor(self):
-        # Get load-balancing monitor info
-        lbmonitor = NSLBMonitor()
-        lbmonitor.set_monitorname('nsnitro_test_lbmonitor')
-        r = NSLBMonitor.get(self.nitro, lbmonitor).__dict__['options']
-        self.assertIn('nsnitro_test_lbmonitor', r['monitorname'])
-        self.assertIn('HEAD /', r['httprequest'])
-        self.assertEqual(5, r['interval'])
-
-    def test_05_get_lbvserver(self):
-        # Get load-balanced virtual server info
-        lbvserver = NSLBVServer()
-        lbvserver.set_name('nsnitro_test_lbvserver')
-        r = NSLBVServer.get(self.nitro, lbvserver).__dict__['options']
-        self.assertIn('nsnitro_test_lbvserver', r['name'])
-        self.assertEqual('180', r['clttimeout'])
-        self.assertEqual(nsnitro_test_lbvserver_port, r['port'])
-
-    def test_05_get_lbvserverservice_bindings(self):
-        # Get load-balanced virtual server/service binding
-        lbvserverservicebinding = NSLBVServerServiceBinding()
-        lbvserverservicebinding.set_name('nsnitro_test_lbvserver')
-        r = NSLBVServerServiceBinding.get(self.nitro, lbvserverservicebinding).__dict__['options']
-        self.assertIn('nsnitro_test_service', r['servicename'])
-        self.assertIn('nsnitro_test_lbvserver', r['name'])
-        self.assertIn(nsnitro_test_server_ipaddress, r['ipv46'])
-        self.assertIn(nsnitro_test_server_ipaddress, r['vsvrbindsvcip'])
-        self.assertEqual(nsnitro_test_service_port, r['port'])
-
-    def test_05_get_nsconfig(self):
-        # Get system configuration
-        r = NSConfig.get_all(self.nitro).__dict__['options']
-        self.assertIn(nsnitro_test_netscaler_ipaddress, r['ipaddress'])
-
-    def test_05_get_server(self):
-        # Get info on a specific server
-        server = NSService()
-        server.set_name('nsnitro_test_server')
-        r = NSServer.get(self.nitro, server).__dict__['options']
-        self.assertIn('nsnitro_test_server', r['name'])
-        self.assertIn(nsnitro_test_server_ipaddress, r['ipaddress'])
-
-    def test_05_get_service(self):
-        # Get info on a specific service
-        service = NSService()
-        service.set_name('nsnitro_test_service')
-        r = NSService.get(self.nitro, service).__dict__['options']
-        self.assertIn('nsnitro_test_service', r['name'])
-        self.assertIn('HTTP', r['servicetype'])
-        self.assertEqual(nsnitro_test_service_port, r['port'])
-
-    def test_05_get_vlan_if_bindings(self):
-        # Get all VLAN/interface bindings
-        vlans = NSVLAN.get_all(self.nitro)
-        vifb_list = []
-        for vlan in vlans:
-            vifbs = NSVLANInterfaceBinding.get(self.nitro, vlan)
-            vifb = vifbs.__dict__['options']
-            vifb_list.append(vifb['id'])
-        self.assertIn('1', vifb_list)
-        self.assertIn(nsnitro_test_vlan_id, vifb_list)
-
-    def test_05_get_vlan_ip_bindings(self):
-        # Get VLAN/IP address bindings
-        vlans = NSVLAN.get_all(self.nitro)
-        vipb_list = []
-        for vlan in vlans:
-            vipbs = NSVLANNSIPBinding.get(self.nitro, vlan)
-            vipb = vipbs.__dict__['options']
-            vipb_list.append(vipb['id'])
-        self.assertIn('1', vipb_list)
-        self.assertIn(nsnitro_test_vlan_id, vipb_list)
-
-    def test_05_get_vlans(self):
-        # Get VLANs
-        vlans = NSVLAN.get_all(self.nitro)
-        vlan_list = []
-        for vlan in vlans:
-            vlan_list.append(vlan.get_id())
-        self.assertIn('1', vlan_list)
-        self.assertIn(nsnitro_test_vlan_id, vlan_list)
-
-"""
+#    def test_05_get_hanodes(self):
+#        # Get HA node info
+#        hanodes = NSHANode.get_all(self.nitro)
+#        hanode_list = []
+#        for hanode in hanodes:
+#            hanode_list.append(hanode.get_id())
+#        self.assertIn('0', hanode_list)
+#
+#    def test_05_get_ips(self):
+#        # List all IPs
+#        ips = NSIP.get_all(self.nitro)
+#        ip_list = []
+#        for ip in ips:
+#            ip_list.append(ip.get_ipaddress())
+#        self.assertIn(nsnitro_test_netscaler_ipaddress, ip_list)
+#        self.assertIn(nsnitro_test_ip_ipaddress, ip_list)
+#
+#    def test_05_get_lbmonitor(self):
+#        # Get load-balancing monitor info
+#        lbmonitor = NSLBMonitor()
+#        lbmonitor.set_monitorname('nsnitro_test_lbmonitor')
+#        r = NSLBMonitor.get(self.nitro, lbmonitor).__dict__['options']
+#        self.assertIn('nsnitro_test_lbmonitor', r['monitorname'])
+#        self.assertIn('HEAD /', r['httprequest'])
+#        self.assertEqual(5, r['interval'])
+#
+#    def test_05_get_lbvserver(self):
+#        # Get load-balanced virtual server info
+#        lbvserver = NSLBVServer()
+#        lbvserver.set_name('nsnitro_test_lbvserver')
+#        r = NSLBVServer.get(self.nitro, lbvserver).__dict__['options']
+#        self.assertIn('nsnitro_test_lbvserver', r['name'])
+#        self.assertEqual('180', r['clttimeout'])
+#        self.assertEqual(nsnitro_test_lbvserver_port, r['port'])
+#
+#    def test_05_get_lbvserverservice_bindings(self):
+#        # Get load-balanced virtual server/service binding
+#        lbvserverservicebinding = NSLBVServerServiceBinding()
+#        lbvserverservicebinding.set_name('nsnitro_test_lbvserver')
+#        r = NSLBVServerServiceBinding.get(self.nitro, lbvserverservicebinding).__dict__['options']
+#        self.assertIn('nsnitro_test_service', r['servicename'])
+#        self.assertIn('nsnitro_test_lbvserver', r['name'])
+#        self.assertIn(nsnitro_test_server_ipaddress, r['ipv46'])
+#        self.assertIn(nsnitro_test_server_ipaddress, r['vsvrbindsvcip'])
+#        self.assertEqual(nsnitro_test_service_port, r['port'])
+#
+#    def test_05_get_nsconfig(self):
+#        # Get system configuration
+#        r = NSConfig.get_all(self.nitro).__dict__['options']
+#        self.assertIn(nsnitro_test_netscaler_ipaddress, r['ipaddress'])
+#
+#    def test_05_get_server(self):
+#        # Get info on a specific server
+#        server = NSService()
+#        server.set_name('nsnitro_test_server')
+#        r = NSServer.get(self.nitro, server).__dict__['options']
+#        self.assertIn('nsnitro_test_server', r['name'])
+#        self.assertIn(nsnitro_test_server_ipaddress, r['ipaddress'])
+#
+#    def test_05_get_service(self):
+#        # Get info on a specific service
+#        service = NSService()
+#        service.set_name('nsnitro_test_service')
+#        r = NSService.get(self.nitro, service).__dict__['options']
+#        self.assertIn('nsnitro_test_service', r['name'])
+#        self.assertIn('HTTP', r['servicetype'])
+#        self.assertEqual(nsnitro_test_service_port, r['port'])
+#
+#    def test_05_get_vlan_if_bindings(self):
+#        # Get all VLAN/interface bindings
+#        vlans = NSVLAN.get_all(self.nitro)
+#        vifb_list = []
+#        for vlan in vlans:
+#            vifbs = NSVLANInterfaceBinding.get(self.nitro, vlan)
+#            vifb = vifbs.__dict__['options']
+#            vifb_list.append(vifb['id'])
+#        self.assertIn('1', vifb_list)
+#        self.assertIn(nsnitro_test_vlan_id, vifb_list)
+#
+#    def test_05_get_vlan_ip_bindings(self):
+#        # Get VLAN/IP address bindings
+#        vlans = NSVLAN.get_all(self.nitro)
+#        vipb_list = []
+#        for vlan in vlans:
+#            vipbs = NSVLANNSIPBinding.get(self.nitro, vlan)
+#            vipb = vipbs.__dict__['options']
+#            vipb_list.append(vipb['id'])
+#        self.assertIn('1', vipb_list)
+#        self.assertIn(nsnitro_test_vlan_id, vipb_list)
+#
+#    def test_05_get_vlans(self):
+#        # Get VLANs
+#        vlans = NSVLAN.get_all(self.nitro)
+#        vlan_list = []
+#        for vlan in vlans:
+#            vlan_list.append(vlan.get_id())
+#        self.assertIn('1', vlan_list)
+#        self.assertIn(nsnitro_test_vlan_id, vlan_list)
 
     def test_06_rename_server_01(self):
         # Rename service
